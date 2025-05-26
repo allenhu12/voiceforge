@@ -211,6 +211,40 @@ class ConfigManager:
         
         self._config["providers"][provider] = config
     
+    def get_default_voice(self, provider: str) -> Optional[str]:
+        """
+        Get the default voice for a specific provider.
+        
+        Args:
+            provider (str): Provider name
+            
+        Returns:
+            Optional[str]: Default voice ID or None
+        """
+        provider_config = self.get_provider_config(provider)
+        return provider_config.get("default_voice")
+    
+    def set_default_voice(self, provider: str, voice_id: str) -> bool:
+        """
+        Set the default voice for a specific provider.
+        
+        Args:
+            provider (str): Provider name
+            voice_id (str): Voice ID to set as default
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            provider_config = self.get_provider_config(provider)
+            provider_config["default_voice"] = voice_id
+            self.set_provider_config(provider, provider_config)
+            self.logger.info(f"Default voice set for {provider}: {voice_id}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to set default voice for {provider}: {e}")
+            return False
+    
     def get_api_key(self, provider: str) -> Optional[str]:
         """
         Get decrypted API key for a provider.

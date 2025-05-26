@@ -35,7 +35,7 @@ class FishTTSClient(TTSServiceInterface):
     
     BASE_URL = "https://api.fish.audio"
     TTS_ENDPOINT = "/v1/tts"
-    MODELS_ENDPOINT = "/v1/models"
+    MODELS_ENDPOINT = "/model"
     
     # Estimated pricing (characters per dollar) - update based on actual Fish Audio pricing
     ESTIMATED_COST_PER_1K_CHARS = 0.015  # $0.015 per 1000 characters
@@ -58,7 +58,7 @@ class FishTTSClient(TTSServiceInterface):
         """Get the name of the TTS service provider."""
         return "Fish Audio"
     
-    def get_available_voices(self, api_key: str) -> Dict[str, Any]:
+    def get_available_voices(self, api_key: str, limit: int = 20) -> Dict[str, Any]:
         """
         Retrieve available voices/models from Fish Audio.
         
@@ -78,8 +78,15 @@ class FishTTSClient(TTSServiceInterface):
             
             log_api_request(self.logger, "Fish Audio", self.MODELS_ENDPOINT, "GET")
             
+            # Add pagination parameters to get more voices
+            params = {
+                "page_size": min(limit, 100),  # Fish Audio max is 100 per page
+                "page_number": 1
+            }
+            
             response = client.get(
                 f"{self.BASE_URL}{self.MODELS_ENDPOINT}",
+                params=params,
                 timeout=30.0
             )
             
@@ -91,7 +98,7 @@ class FishTTSClient(TTSServiceInterface):
             models_data = response.json()
             
             # Process and cache the models
-            processed_models = self._process_models_response(models_data)
+            processed_models = self._process_models_response(models_data, limit)
             self._models_cache = processed_models
             self._cache_timestamp = time.time()
             
@@ -111,26 +118,66 @@ class FishTTSClient(TTSServiceInterface):
             return False
         return (time.time() - self._cache_timestamp) < self._cache_duration
     
-    def _process_models_response(self, models_data: Dict) -> Dict[str, Any]:
+    def _process_models_response(self, models_data: Dict, limit: int = 20) -> Dict[str, Any]:
         """Process the models response from Fish Audio API."""
         processed = {
             "provider": "Fish Audio",
             "models": [],
-            "default_model": "speech-1.6"
+            "default_model": "speech-1.6",
+            "total_available": 0
         }
         
-        # If API returns model list, process it
-        if isinstance(models_data, dict) and "models" in models_data:
-            for model in models_data["models"]:
-                if isinstance(model, dict):
+        # Handle Fish Audio API response format
+        if isinstance(models_data, dict):
+            # Get total count
+            processed["total_available"] = models_data.get("total", 0)
+            
+            # Process items (voice models)
+            items = models_data.get("items", [])
+            
+            # Add default AI models first
+            processed["models"].extend([
+                {
+                    "id": "speech-1.6",
+                    "name": "Speech 1.6 (AI)",
+                    "description": "Latest Fish Audio AI speech model",
+                    "languages": ["en", "zh", "ja", "ko", "fr", "de", "es", "ar"],
+                    "type": "ai",
+                    "author": "Fish Audio"
+                },
+                {
+                    "id": "speech-1.5", 
+                    "name": "Speech 1.5 (AI)",
+                    "description": "Previous generation AI speech model",
+                    "languages": ["en", "zh", "ja"],
+                    "type": "ai",
+                    "author": "Fish Audio"
+                }
+            ])
+            
+            # Add human voice models
+            for item in items[:limit]:  # Limit based on parameter
+                if isinstance(item, dict) and item.get("type") == "tts":
+                    # Get sample audio info if available
+                    samples = item.get("samples", [])
+                    sample_text = ""
+                    if samples and len(samples) > 0:
+                        sample_text = samples[0].get("text", "")[:100] + "..." if len(samples[0].get("text", "")) > 100 else samples[0].get("text", "")
+                    
                     processed["models"].append({
-                        "id": model.get("id", "unknown"),
-                        "name": model.get("name", model.get("id", "Unknown")),
-                        "description": model.get("description", ""),
-                        "languages": model.get("languages", ["en"])
+                        "id": item.get("_id", "unknown"),
+                        "name": item.get("title", "Unknown Voice"),
+                        "description": item.get("description", sample_text),
+                        "languages": item.get("languages", ["en"]),
+                        "type": "human",
+                        "author": item.get("author", {}).get("nickname", "Unknown"),
+                        "like_count": item.get("like_count", 0),
+                        "task_count": item.get("task_count", 0),
+                        "tags": item.get("tags", [])
                     })
-        else:
-            # Fallback to default models
+        
+        # Fallback if no items found
+        if not processed["models"]:
             processed = self._get_default_models()
         
         return processed
@@ -214,31 +261,42 @@ class FishTTSClient(TTSServiceInterface):
             bool: True if conversion was successful, False otherwise
         """
         try:
-            client = self._get_client(api_key)
+            start_time = time.time()
             
-            # Prepare request data
-            request_data = ServeTTSRequest(
-                text=text,
-                format="mp3",
-                mp3_bitrate=mp3_bitrate,
-                model=voice_or_model
-            )
+            # Use simple JSON request for better performance
+            request_data = {
+                "text": text,
+                "format": "mp3"
+            }
             
-            # Serialize with msgpack
-            request_body = ormsgpack.packb(request_data.model_dump())
+            # Prepare headers
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # Add model/voice handling
+            if voice_or_model and voice_or_model not in ["speech-1.6", "speech-1.5"]:
+                # Human voice model
+                request_data["reference_id"] = voice_or_model
+            else:
+                # AI model - use header
+                headers["model"] = voice_or_model
             
             log_api_request(self.logger, "Fish Audio", self.TTS_ENDPOINT)
+            self.logger.debug(f"TTS request: {len(text)} chars, voice: {voice_or_model}")
             
-            # Make the API request
-            response = client.post(
-                f"{self.BASE_URL}{self.TTS_ENDPOINT}",
-                content=request_body,
-                headers={
-                    "Content-Type": "application/msgpack",
-                    "Authorization": f"Bearer {api_key}"
-                },
-                timeout=120.0  # Longer timeout for TTS generation
-            )
+            # Make the API request with a fresh client for better performance
+            with httpx.Client() as client:
+                response = client.post(
+                    f"{self.BASE_URL}{self.TTS_ENDPOINT}",
+                    json=request_data,
+                    headers=headers,
+                    timeout=30.0  # Reduced timeout for faster failure detection
+                )
+            
+            api_time = time.time() - start_time
+            self.logger.debug(f"API response time: {api_time:.2f}s")
             
             # Handle response
             if response.status_code == 401:
@@ -255,12 +313,18 @@ class FishTTSClient(TTSServiceInterface):
             if not audio_data:
                 raise TTSServiceError("Fish Audio", "Received empty audio data")
             
+            self.logger.debug(f"Received {len(audio_data)} bytes of audio data")
+            
             # Write to file
+            write_start = time.time()
             output_file_path = Path(output_file_path)
             output_file_path.parent.mkdir(parents=True, exist_ok=True)
             
             with open(output_file_path, 'wb') as f:
                 f.write(audio_data)
+            
+            write_time = time.time() - write_start
+            total_time = time.time() - start_time
             
             # Verify file was written
             if not output_file_path.exists() or output_file_path.stat().st_size == 0:
@@ -269,6 +333,7 @@ class FishTTSClient(TTSServiceInterface):
             self.logger.info(
                 f"TTS conversion successful: {len(text)} chars → {len(audio_data)} bytes → {output_file_path}"
             )
+            self.logger.debug(f"Total time: {total_time:.2f}s (API: {api_time:.2f}s, Write: {write_time:.3f}s)")
             return True
             
         except (AuthenticationError, NetworkError, TTSServiceError):

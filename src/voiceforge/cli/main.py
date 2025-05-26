@@ -123,7 +123,24 @@ def convert(
         
         # Determine voice
         if not voice:
-            voice = tts_service.get_default_voice()
+            # First check if there's a configured default voice for this provider
+            configured_voice = ctx.config_manager.get_default_voice(provider)
+            if configured_voice:
+                voice = configured_voice
+                # Map known voice IDs to names
+                voice_names = {
+                    "cfc33da8775c47afacccf4eebabe44dc": "Taylor Swift",
+                    "54e3a85ac9594ffa83264b8a494b901b": "SpongeBob SquarePants",
+                    "e58b0d7efca34eb38d5c4985e378abcb": "POTUS 47 - Trump",
+                    "802e3bc2b27e49c2995d23ef70e6ac89": "Energetic Male",
+                    "speech-1.6": "Speech 1.6 (AI)",
+                    "speech-1.5": "Speech 1.5 (AI)"
+                }
+                voice_name = voice_names.get(voice, voice[:8] + "...")
+                click.echo(f"📢 Using configured default voice: {voice_name}")
+            else:
+                # Fall back to provider's default
+                voice = tts_service.get_default_voice()
         
         # Cost estimation
         estimated_cost = tts_service.estimate_cost(text, voice)
@@ -244,12 +261,77 @@ def show_config(ctx: CLIContext):
     click.echo(f"  Default provider: {ctx.config_manager.get_default_provider()}")
     click.echo(f"  Output directory: {ctx.config_manager.get_output_directory()}")
     click.echo(f"  Configured providers: {len(ctx.config_manager.list_providers())}")
+    
+    # Show default voice for each provider
+    for provider in ctx.config_manager.list_providers():
+        default_voice = ctx.config_manager.get_default_voice(provider)
+        if default_voice:
+            # Map known voice IDs to names
+            voice_names = {
+                "cfc33da8775c47afacccf4eebabe44dc": "Taylor Swift",
+                "54e3a85ac9594ffa83264b8a494b901b": "SpongeBob SquarePants",
+                "e58b0d7efca34eb38d5c4985e378abcb": "POTUS 47 - Trump",
+                "802e3bc2b27e49c2995d23ef70e6ac89": "Energetic Male",
+                "7f92f8afb8ec43bf81429cc1c9199cb1": "AD学姐",
+                "54a5170264694bfc8e9ad98df7bd89c3": "丁真",
+                "aebaa2305aa2452fbdc8f41eec852a79": "雷军",
+                "speech-1.6": "Speech 1.6 (AI)",
+                "speech-1.5": "Speech 1.5 (AI)"
+            }
+            voice_name = voice_names.get(default_voice, default_voice[:8] + "...")
+            click.echo(f"  Default voice for {provider}: {voice_name} ({default_voice})")
+
+
+@config.command('set-default-voice')
+@click.argument('provider')
+@click.argument('voice_id')
+@pass_context
+def set_default_voice(ctx: CLIContext, provider: str, voice_id: str):
+    """Set default voice for a TTS provider."""
+    try:
+        # Check if provider has API key
+        if not ctx.config_manager.has_api_key(provider):
+            click.echo(f"❌ No API key found for {provider}. Set API key first.")
+            sys.exit(1)
+        
+        # Set the default voice
+        if ctx.config_manager.set_default_voice(provider, voice_id):
+            ctx.config_manager.save_config()
+            
+            # Map known voice IDs to names
+            voice_names = {
+                "cfc33da8775c47afacccf4eebabe44dc": "Taylor Swift",
+                "54e3a85ac9594ffa83264b8a494b901b": "SpongeBob SquarePants",
+                "e58b0d7efca34eb38d5c4985e378abcb": "POTUS 47 - Trump",
+                "802e3bc2b27e49c2995d23ef70e6ac89": "Energetic Male",
+                "728f6ff2240d49308e8137ffe66008e2": "ElevenLabs Adam",
+                "0cd6cf9684dd4cc9882fbc98957c9b1d": "The Elephant",
+                "7f92f8afb8ec43bf81429cc1c9199cb1": "AD学姐",
+                "54a5170264694bfc8e9ad98df7bd89c3": "丁真",
+                "aebaa2305aa2452fbdc8f41eec852a79": "雷军",
+                "5b67899dc9a34685ae09c94c890a606f": "عصام الشوالي",
+                "ef9c79b62ef34530bf452c0e50e3c260": "Horror",
+                "speech-1.6": "Speech 1.6 (AI)",
+                "speech-1.5": "Speech 1.5 (AI)"
+            }
+            
+            voice_name = voice_names.get(voice_id, "Custom Voice")
+            click.echo(f"✅ Default voice set for {provider}: {voice_name}")
+            click.echo(f"   Voice ID: {voice_id}")
+        else:
+            click.echo(f"❌ Failed to set default voice for {provider}")
+            sys.exit(1)
+    except Exception as e:
+        click.echo(f"❌ Error setting default voice: {e}")
+        sys.exit(1)
 
 
 @cli.command('list-voices')
 @click.option('--provider', '-p', help='TTS provider (default: configured provider)')
+@click.option('--ids-only', is_flag=True, help='Show only voice IDs (one per line)')
+@click.option('--limit', '-l', type=int, default=20, help='Limit number of voices shown (default: 20)')
 @pass_context
-def list_voices(ctx: CLIContext, provider: Optional[str]):
+def list_voices(ctx: CLIContext, provider: Optional[str], ids_only: bool, limit: int):
     """List available voices for a TTS provider."""
     try:
         if not provider:
@@ -263,27 +345,74 @@ def list_voices(ctx: CLIContext, provider: Optional[str]):
         tts_service = TTSServiceFactory.create_service(provider)
         
         click.echo(f"🔄 Fetching voices for {provider}...")
-        voices_data = tts_service.get_available_voices(api_key)
+        voices_data = tts_service.get_available_voices(api_key, limit=limit)
         
+        total_available = voices_data.get('total_available', 0)
         click.echo(f"\nAvailable voices for {voices_data.get('provider', provider)}:")
+        if total_available > 0:
+            click.echo(f"📊 Total voices available: {total_available:,}")
+            click.echo(f"📋 Showing first {len(voices_data.get('models', []))} voices:\n")
         
         models = voices_data.get('models', [])
         if not models:
             click.echo("  No voices available.")
             return
         
-        for model in models:
-            name = model.get('name', model.get('id', 'Unknown'))
-            model_id = model.get('id', 'unknown')
-            description = model.get('description', '')
-            languages = ', '.join(model.get('languages', []))
-            
-            click.echo(f"  • {name} ({model_id})")
-            if description:
-                click.echo(f"    {description}")
-            if languages:
-                click.echo(f"    Languages: {languages}")
-            click.echo()
+        # If ids-only flag is set, just print the IDs
+        if ids_only:
+            for model in models:
+                click.echo(model.get('id', 'unknown'))
+            return
+        
+        # Group by type
+        ai_models = [m for m in models if m.get('type') == 'ai']
+        human_models = [m for m in models if m.get('type') == 'human']
+        
+        # Display AI models first
+        if ai_models:
+            click.echo("🤖 AI Models:")
+            for model in ai_models:
+                name = model.get('name', model.get('id', 'Unknown'))
+                model_id = model.get('id', 'unknown')
+                description = model.get('description', '')
+                languages = ', '.join(model.get('languages', []))
+                
+                click.echo(f"  • {name} ({model_id})")
+                if description:
+                    click.echo(f"    {description}")
+                if languages:
+                    click.echo(f"    Languages: {languages}")
+                click.echo()
+        
+        # Display human voice models
+        if human_models:
+            click.echo("👤 Human Voice Models:")
+            for model in human_models:
+                name = model.get('name', model.get('id', 'Unknown'))
+                model_id = model.get('id', 'unknown')
+                description = model.get('description', '')
+                languages = ', '.join(model.get('languages', []))
+                author = model.get('author', 'Unknown')
+                like_count = model.get('like_count', 0)
+                task_count = model.get('task_count', 0)
+                tags = model.get('tags', [])
+                
+                click.echo(f"  • {name} ({model_id})")
+                if description:
+                    click.echo(f"    {description}")
+                if languages:
+                    click.echo(f"    Languages: {languages}")
+                if author != 'Unknown':
+                    click.echo(f"    Author: {author}")
+                if like_count > 0:
+                    click.echo(f"    👍 {like_count:,} likes | 🎯 {task_count:,} uses")
+                if tags:
+                    click.echo(f"    Tags: {', '.join(tags)}")
+                click.echo()
+        
+        if total_available > len(models):
+            click.echo(f"💡 Tip: There are {total_available - len(models):,} more voices available.")
+            click.echo("    Visit https://fish.audio/ to browse all voices.")
             
     except VoiceForgeError as e:
         click.echo(f"❌ Error: {e}")
