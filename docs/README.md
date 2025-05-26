@@ -20,6 +20,7 @@ A powerful, modular text-to-speech application that converts text files to high-
 
 ### 🛠️ Developer Resources
 - **[Phase 1 Summary](phase1-summary.md)** - Comprehensive development overview and architecture explanation
+- **[Git Workflow Guide](git-workflow.md)** - Version control guidelines and best practices
 - **[Development Setup](getting-started-guide.md#development-setup)** - Setting up development environment
 - **[Code Structure](getting-started-guide.md#understanding-the-code-structure)** - Understanding the codebase
 - **[Adding TTS Providers](getting-started-guide.md#adding-a-new-tts-provider)** - Extending VoiceForge
@@ -66,6 +67,11 @@ A powerful, modular text-to-speech application that converts text files to high-
 **Length**: ~500 lines  
 **Audience**: Developers and Technical Users  
 **Content**: Comprehensive development overview, step-by-step architecture explanation, design decisions, data flow, and testing results.
+
+### 🌿 [Git Workflow Guide](git-workflow.md)
+**Length**: ~400 lines  
+**Audience**: Developers and Contributors  
+**Content**: Version control guidelines, branch strategy, commit conventions, development workflow, and collaboration best practices.
 
 ### 🎬 [Demo Script](../demo.py)
 **Length**: ~150 lines  
