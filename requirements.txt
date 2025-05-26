@@ -1,0 +1,17 @@
+# Core dependencies for VoiceForge
+click>=8.0.0
+httpx>=0.24.0
+ormsgpack>=1.2.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+cryptography>=3.4.0
+chardet>=5.0.0
+
+# Optional GUI dependencies (install with: pip install voiceforge[gui])
+# customtkinter>=5.0.0
+
+# Development dependencies (install with: pip install voiceforge[dev])
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=5.0.0
+# mypy>=1.0.0 
