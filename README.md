@@ -5,6 +5,7 @@ Convert text files to high-quality MP3 audio using advanced Text-to-Speech servi
 ## Features
 
 - 🎯 **Simple CLI Interface** - Easy-to-use command-line tool
+- 📦 **Standalone Executables** - No Python installation required for end users
 - 🎭 **Speech Type Presets** - 12 optimized presets for different use cases (audiobook, podcast, presentation, etc.)
 - 🗣️ **Natural Speech Mode** - Enhanced text preprocessing with proper pauses and natural flow
 - 📈 **Real-Time Progress Tracking** - Smooth progress bars with live status updates
@@ -19,6 +20,7 @@ Convert text files to high-quality MP3 audio using advanced Text-to-Speech servi
 
 ### Installation
 
+#### Option 1: Python Package (Developers)
 ```bash
 # Install VoiceForge
 pip install voiceforge
@@ -26,6 +28,15 @@ pip install voiceforge
 # Or install with GUI support (coming soon)
 pip install voiceforge[gui]
 ```
+
+#### Option 2: Standalone Executable (End Users)
+**No Python Required!** Download the pre-built executable for your platform:
+
+- **Windows**: Download `VoiceForge.exe` 
+- **macOS**: Download `VoiceForge` binary
+- **Linux**: Download `VoiceForge` binary
+
+Or build your own using the instructions in [Building Standalone Executables](#building-standalone-executables).
 
 ### Basic Usage
 
@@ -247,6 +258,92 @@ VoiceForge stores configuration in platform-specific directories:
   }
 }
 ```
+
+## Building Standalone Executables
+
+VoiceForge can be packaged into standalone executables that work without Python installation on Windows, macOS, and Linux.
+
+### Quick Build
+
+```bash
+# Install build dependencies
+pip install -r requirements-build.txt
+
+# Build for current platform
+python build_config.py
+
+# Find executable in dist/ directory
+```
+
+### Platform-Specific Builds
+
+```bash
+# Windows (on Windows system)
+python build_config.py --platform windows
+# Or: build_windows.bat
+
+# macOS (on macOS system) 
+python build_config.py --platform macos
+# Or: ./build_macos.sh
+
+# Linux (on Linux system)
+python build_config.py --platform linux  
+# Or: ./build_linux.sh
+```
+
+### Build Options
+
+```bash
+# Clean build (remove previous artifacts)
+python build_config.py --clean
+
+# Debug build (larger, with debug symbols)
+python build_config.py --debug
+
+# Create platform build scripts
+python build_config.py --create-scripts
+```
+
+### Distribution
+
+After building, you'll find standalone executables in:
+- **Windows**: `dist/windows/VoiceForge.exe` (~50-80 MB)
+- **macOS**: `dist/macos/VoiceForge` (~13-15 MB)
+- **Linux**: `dist/linux/VoiceForge` (~50-80 MB)
+
+### End User Installation
+
+**No Python Required!** Users can simply:
+
+1. **Download** the appropriate executable for their platform
+2. **Make executable** (macOS/Linux only): `chmod +x VoiceForge`
+3. **Run directly**: `./VoiceForge --help`
+
+### Usage Examples for Standalone Executables
+
+```bash
+# Set up API key
+./VoiceForge config set-api-key fish_audio YOUR_API_KEY
+
+# Convert text files
+./VoiceForge convert --input story.txt
+./VoiceForge convert --input novel.txt --speech-type female-narrator
+
+# Explore features
+./VoiceForge list-speech-types
+./VoiceForge list-voices
+```
+
+### Build Requirements
+
+- **Python 3.8+** (for building only)
+- **PyInstaller 5.0+** (automatically installed)
+- **Platform-specific tools**:
+  - Windows: Visual Studio Build Tools
+  - macOS: Xcode Command Line Tools
+  - Linux: build-essential package
+
+For detailed packaging instructions, see [`PACKAGING_GUIDE.md`](PACKAGING_GUIDE.md).
 
 ## Development
 
