@@ -7,6 +7,8 @@ Command-line interface for VoiceForge text-to-speech conversion.
 import sys
 from pathlib import Path
 from typing import Optional
+import threading
+import time
 
 import click
 
@@ -14,6 +16,7 @@ from .. import __version__, __app_name__
 from ..core.config_manager import ConfigManager
 from ..core.input_handler import InputHandler
 from ..core.output_handler import OutputHandler
+from ..core.speech_presets import SpeechPresets
 from ..services.service_factory import TTSServiceFactory
 from ..utils.logger import setup_application_logging
 from ..utils.exceptions import (
@@ -67,27 +70,79 @@ def cli(ctx: CLIContext, verbose: bool, config_dir: Optional[str]):
 @click.option('--input', '-i', 'input_file', required=True, 
               type=click.Path(exists=True, path_type=Path),
               help='Input text file to convert')
+@click.option('--output', '-f', 'output_filename',
+              help='Custom output filename (without extension, .mp3 will be added)')
 @click.option('--output-dir', '-o', type=click.Path(path_type=Path),
               help='Output directory (default: configured directory)')
 @click.option('--provider', '-p', help='TTS provider to use (default: configured provider)')
 @click.option('--voice', '-v', help='Voice/model to use (default: provider default)')
-@click.option('--bitrate', '-b', type=int, default=128, 
-              help='MP3 bitrate (default: 128)')
+@click.option('--bitrate', '-b', type=click.Choice(['64', '128', '192']), default='128', 
+              help='MP3 bitrate in kbps (default: 128)')
+@click.option('--natural', is_flag=True, default=True,
+              help='Enable natural speech mode (default: enabled, use --no-natural to disable)')
+@click.option('--no-natural', 'disable_natural', is_flag=True,
+              help='Disable natural speech mode (use basic TTS without preprocessing)')
+@click.option('--speech-speed', type=float, default=0.9,
+              help='Speech speed (0.5-2.0, default: 0.9 for natural mode)')
+@click.option('--temperature', type=float, default=0.7,
+              help='Speech variation/randomness (0.1-1.0, default: 0.7)')
+@click.option('--top-p', type=float, default=0.7,
+              help='Speech diversity control (0.1-1.0, default: 0.7)')
+@click.option('--paragraph-pause', type=click.Choice(['short', 'medium', 'long']), default='medium',
+              help='Length of pauses between paragraphs (default: medium)')
+@click.option('--speech-type', type=click.Choice(SpeechPresets.get_preset_choices()), 
+              help='Predefined speech type with optimized parameters (overrides individual parameter settings)')
 @click.option('--overwrite', is_flag=True, help='Overwrite existing output files')
 @click.option('--estimate-only', is_flag=True, help='Only show cost estimate, do not convert')
 @pass_context
 def convert(
     ctx: CLIContext,
     input_file: Path,
+    output_filename: Optional[str],
     output_dir: Optional[Path],
     provider: Optional[str],
     voice: Optional[str],
-    bitrate: int,
+    bitrate: str,
+    natural: bool,
+    disable_natural: bool,
+    speech_speed: float,
+    temperature: float,
+    top_p: float,
+    paragraph_pause: str,
+    speech_type: Optional[str],
     overwrite: bool,
     estimate_only: bool
 ):
     """Convert a text file to MP3 audio."""
     try:
+        # Handle speech type preset (overrides individual parameters)
+        if speech_type:
+            try:
+                preset = SpeechPresets.get_preset(speech_type)
+                # Override parameters with preset values
+                speech_speed = preset.speech_speed
+                temperature = preset.temperature
+                top_p = preset.top_p
+                paragraph_pause = preset.paragraph_pause
+                natural = preset.natural_speech
+                
+                # Use preset's preferred voice if no voice specified
+                if not voice:
+                    voice = preset.voice_preference
+                
+                click.echo(f"🎭 Using speech type preset: {preset.name}")
+                click.echo(f"   Description: {preset.description}")
+                click.echo(f"   Use case: {preset.use_case}")
+                click.echo(f"   Parameters: speed={speech_speed}, temp={temperature}, top_p={top_p}, pause={paragraph_pause}")
+                
+            except ValueError as e:
+                click.echo(f"❌ Error: {e}")
+                sys.exit(1)
+        
+        # Handle natural speech mode (default is enabled)
+        if disable_natural:
+            natural = False
+        
         # Determine provider
         if not provider:
             provider = ctx.config_manager.get_default_provider()
@@ -121,6 +176,17 @@ def convert(
         click.echo(f"   Words: {char_count['words']:,}")
         click.echo(f"   Lines: {char_count['lines']:,}")
         
+        # Warn about large files
+        if char_count['total_characters'] > 5000:
+            click.echo(f"\n⚠️  Large file detected! Processing {char_count['total_characters']:,} characters may take several minutes.")
+            if char_count['total_characters'] > 10000:
+                click.echo(f"⚠️  Files over 10,000 characters may take 5-10 minutes or more to process.")
+        
+        # Estimate processing time
+        estimated_time = char_count['total_characters'] / 100  # Rough estimate: 100 chars/second
+        if estimated_time > 10:
+            click.echo(f"⏱️  Estimated processing time: {estimated_time:.0f}-{estimated_time*1.5:.0f} seconds")
+        
         # Determine voice
         if not voice:
             # First check if there's a configured default voice for this provider
@@ -129,6 +195,7 @@ def convert(
                 voice = configured_voice
                 # Map known voice IDs to names
                 voice_names = {
+                    "b545c585f631496c914815291da4e893": "Default Female Voice",
                     "cfc33da8775c47afacccf4eebabe44dc": "Taylor Swift",
                     "54e3a85ac9594ffa83264b8a494b901b": "SpongeBob SquarePants",
                     "e58b0d7efca34eb38d5c4985e378abcb": "POTUS 47 - Trump",
@@ -147,6 +214,14 @@ def convert(
         if estimated_cost:
             click.echo(f"💰 Estimated cost: {estimated_cost}")
         
+        # Output size estimation
+        size_estimate = tts_service.estimate_output_size(text, int(bitrate), voice)
+        if size_estimate and "error" not in size_estimate:
+            click.echo(f"📏 Estimated output:")
+            click.echo(f"   Duration: {size_estimate['estimated_duration_str']}")
+            click.echo(f"   File size: {size_estimate['estimated_size_str']} (at {bitrate} kbps)")
+            click.echo(f"   Words: {size_estimate['word_count']:,} (~{size_estimate['words_per_minute']} WPM)")
+        
         if estimate_only:
             click.echo("✅ Cost estimation complete.")
             return
@@ -160,6 +235,7 @@ def convert(
         output_path = output_handler.get_output_path(
             input_file=input_file,
             output_dir=output_dir,
+            custom_filename=output_filename,
             provider=provider,
             voice=voice
         )
@@ -169,20 +245,83 @@ def convert(
         click.echo(f"   Voice: {voice}")
         click.echo(f"   Output: {output_path}")
         
-        # Perform conversion
-        success = tts_service.text_to_speech(
-            api_key=api_key,
-            text=text,
-            output_file_path=output_path,
-            voice_or_model=voice,
-            mp3_bitrate=bitrate
-        )
+        # Show natural speech mode info
+        if natural:
+            if speech_type:
+                click.echo(f"🎭 Natural speech mode enabled via preset:")
+            else:
+                click.echo(f"🎭 Natural speech mode enabled (default):")
+            click.echo(f"   Speech speed: {speech_speed}x")
+            click.echo(f"   Temperature: {temperature}")
+            click.echo(f"   Top-p: {top_p}")
+            click.echo(f"   Paragraph pauses: {paragraph_pause}")
+            click.echo(f"   Text preprocessing: enabled")
+            if not speech_type:
+                click.echo(f"   💡 Use --speech-type to apply optimized presets")
+        else:
+            click.echo(f"⚡ Basic TTS mode (natural speech disabled)")
+        
+        # Prepare extra settings for natural speech
+        extra_settings = {}
+        if natural:
+            extra_settings = {
+                "natural_speech": True,
+                "speech_speed": speech_speed,
+                "temperature": temperature,
+                "top_p": top_p,
+                "paragraph_pause": paragraph_pause,
+                "enable_preprocessing": True,
+                "prosody": {
+                    "speed": speech_speed,
+                    "volume": 0
+                }
+            }
+        
+        # Show progress spinner during conversion
+        progress_bar = None
+        
+        def progress_callback(percentage: int, status: str):
+            if progress_bar:
+                # Update progress bar position
+                if percentage > progress_bar.pos:
+                    progress_bar.update(percentage - progress_bar.pos)
+                # Update label
+                progress_bar.label = f"Converting: {status}"
+        
+        # Show real progress bar during conversion
+        with click.progressbar(length=100, label='Converting: Starting...') as bar:
+            progress_bar = bar
+            
+            # Perform the conversion with progress callback
+            success = tts_service.text_to_speech(
+                api_key=api_key,
+                text=text,
+                output_file_path=output_path,
+                voice_or_model=voice,
+                mp3_bitrate=int(bitrate),
+                extra_settings=extra_settings,
+                progress_callback=progress_callback
+            )
         
         if success:
             file_size = output_path.stat().st_size
+            file_size_mb = file_size / 1024 / 1024
             click.echo(f"✅ Conversion successful!")
             click.echo(f"   Output file: {output_path}")
-            click.echo(f"   File size: {file_size / 1024 / 1024:.2f} MB")
+            click.echo(f"   File size: {file_size_mb:.2f} MB")
+            
+            # Show comparison with estimate if available
+            if size_estimate and "error" not in size_estimate:
+                estimated_mb = size_estimate['estimated_size_mb']
+                difference_mb = file_size_mb - estimated_mb
+                accuracy_percent = (1 - abs(difference_mb) / estimated_mb) * 100 if estimated_mb > 0 else 0
+                
+                if abs(difference_mb) < 0.1:
+                    click.echo(f"   Estimate accuracy: Very close! (±{abs(difference_mb):.2f} MB)")
+                elif accuracy_percent > 80:
+                    click.echo(f"   Estimate accuracy: Good ({accuracy_percent:.0f}% accurate)")
+                else:
+                    click.echo(f"   Estimate vs actual: {estimated_mb:.1f} MB → {file_size_mb:.1f} MB")
             
             # Offer to open output directory
             if click.confirm("Open output directory?"):
@@ -268,6 +407,7 @@ def show_config(ctx: CLIContext):
         if default_voice:
             # Map known voice IDs to names
             voice_names = {
+                "b545c585f631496c914815291da4e893": "Default Female Voice",
                 "cfc33da8775c47afacccf4eebabe44dc": "Taylor Swift",
                 "54e3a85ac9594ffa83264b8a494b901b": "SpongeBob SquarePants",
                 "e58b0d7efca34eb38d5c4985e378abcb": "POTUS 47 - Trump",
@@ -300,6 +440,7 @@ def set_default_voice(ctx: CLIContext, provider: str, voice_id: str):
             
             # Map known voice IDs to names
             voice_names = {
+                "b545c585f631496c914815291da4e893": "Default Female Voice",
                 "cfc33da8775c47afacccf4eebabe44dc": "Taylor Swift",
                 "54e3a85ac9594ffa83264b8a494b901b": "SpongeBob SquarePants",
                 "e58b0d7efca34eb38d5c4985e378abcb": "POTUS 47 - Trump",
@@ -324,6 +465,40 @@ def set_default_voice(ctx: CLIContext, provider: str, voice_id: str):
     except Exception as e:
         click.echo(f"❌ Error setting default voice: {e}")
         sys.exit(1)
+
+
+@cli.command('list-speech-types')
+@pass_context
+def list_speech_types(ctx: CLIContext):
+    """List all available speech type presets."""
+    click.echo("🎭 Available Speech Type Presets:\n")
+    
+    presets = SpeechPresets.get_all_presets()
+    
+    # Group presets by category for better organization
+    categories = {
+        "Narration": ["female-narrator", "male-narrator", "audiobook", "storytelling"],
+        "Professional": ["presentation", "educational", "news", "technical"],
+        "Casual": ["podcast", "conversational"],
+        "Specialized": ["meditation", "dramatic"]
+    }
+    
+    for category, preset_names in categories.items():
+        click.echo(f"📂 {category}:")
+        for name in preset_names:
+            if name in presets:
+                preset = presets[name]
+                click.echo(f"  • {name}: {preset.description}")
+                click.echo(f"    Use case: {preset.use_case}")
+                click.echo(f"    Parameters: speed={preset.speech_speed}, temp={preset.temperature}, top_p={preset.top_p}")
+                click.echo()
+        click.echo()
+    
+    click.echo("💡 Usage examples:")
+    click.echo("   voiceforge convert --input story.txt --speech-type female-narrator")
+    click.echo("   voiceforge convert --input presentation.txt --speech-type presentation")
+    click.echo("   voiceforge convert --input meditation.txt --speech-type meditation")
+    click.echo("\n🔧 Note: Speech type presets override individual parameter settings")
 
 
 @cli.command('list-voices')

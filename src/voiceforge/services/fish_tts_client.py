@@ -6,6 +6,7 @@ Handles Fish Audio API communication, authentication, and audio generation.
 """
 
 import time
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import httpx
@@ -237,6 +238,77 @@ class FishTTSClient(TTSServiceInterface):
             self.logger.warning(f"Failed to estimate cost: {e}")
             return None
     
+    def estimate_output_size(
+        self,
+        text: str,
+        mp3_bitrate: int = 128,
+        voice_or_model: str = "speech-1.6"
+    ) -> Dict[str, Any]:
+        """
+        Estimate the output file size and duration for given text.
+        
+        Args:
+            text (str): The text to be converted
+            mp3_bitrate (int): MP3 bitrate in kbps
+            voice_or_model (str): The voice or model to use
+            
+        Returns:
+            Dict[str, Any]: Dictionary containing size and duration estimates
+        """
+        try:
+            char_count = len(text)
+            word_count = len(text.split())
+            
+            # Estimate speech duration (average reading speed: 150-200 WPM)
+            words_per_minute = 160  # Conservative estimate
+            estimated_duration_minutes = word_count / words_per_minute
+            estimated_duration_seconds = estimated_duration_minutes * 60
+            
+            # Estimate file size based on bitrate and duration
+            # MP3 file size = (bitrate in kbps * duration in seconds) / 8 / 1024 MB
+            estimated_size_mb = (mp3_bitrate * estimated_duration_seconds) / 8 / 1024
+            estimated_size_kb = estimated_size_mb * 1024
+            
+            # Format duration string
+            if estimated_duration_minutes < 1:
+                duration_str = f"{int(estimated_duration_seconds)}s"
+            elif estimated_duration_minutes < 60:
+                minutes = int(estimated_duration_minutes)
+                seconds = int((estimated_duration_minutes - minutes) * 60)
+                duration_str = f"{minutes}m {seconds}s"
+            else:
+                hours = int(estimated_duration_minutes // 60)
+                minutes = int(estimated_duration_minutes % 60)
+                duration_str = f"{hours}h {minutes}m"
+            
+            # Format file size
+            if estimated_size_mb < 1:
+                size_str = f"{estimated_size_kb:.0f} KB"
+            elif estimated_size_mb < 100:
+                size_str = f"{estimated_size_mb:.1f} MB"
+            else:
+                size_str = f"{estimated_size_mb:.0f} MB"
+            
+            return {
+                "estimated_duration_seconds": estimated_duration_seconds,
+                "estimated_duration_str": duration_str,
+                "estimated_size_mb": estimated_size_mb,
+                "estimated_size_kb": estimated_size_kb,
+                "estimated_size_str": size_str,
+                "bitrate": mp3_bitrate,
+                "char_count": char_count,
+                "word_count": word_count,
+                "words_per_minute": words_per_minute
+            }
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to estimate output size: {e}")
+            return {
+                "estimated_duration_str": "Unknown",
+                "estimated_size_str": "Unknown",
+                "error": str(e)
+            }
+    
     def text_to_speech(
         self,
         api_key: str,
@@ -244,7 +316,8 @@ class FishTTSClient(TTSServiceInterface):
         output_file_path: Path,
         voice_or_model: str,
         mp3_bitrate: int = 128,
-        extra_settings: Optional[Dict[str, Any]] = None
+        extra_settings: Optional[Dict[str, Any]] = None,
+        progress_callback: Optional[callable] = None
     ) -> bool:
         """
         Convert text to speech using Fish Audio API.
@@ -256,6 +329,7 @@ class FishTTSClient(TTSServiceInterface):
             voice_or_model (str): The voice or model to use
             mp3_bitrate (int): MP3 bitrate (default: 128)
             extra_settings (Optional[Dict[str, Any]]): Additional settings
+            progress_callback (Optional[callable]): Callback function for progress updates
             
         Returns:
             bool: True if conversion was successful, False otherwise
@@ -263,10 +337,15 @@ class FishTTSClient(TTSServiceInterface):
         try:
             start_time = time.time()
             
+            # Progress tracking stages
+            if progress_callback:
+                progress_callback(5, "Preparing request...")
+            
             # Use simple JSON request for better performance
             request_data = {
                 "text": text,
-                "format": "mp3"
+                "format": "mp3",
+                "mp3_bitrate": mp3_bitrate
             }
             
             # Prepare headers
@@ -283,47 +362,162 @@ class FishTTSClient(TTSServiceInterface):
                 # AI model - use header
                 headers["model"] = voice_or_model
             
+            if progress_callback:
+                progress_callback(10, "Sending request to Fish Audio API...")
+            
             log_api_request(self.logger, "Fish Audio", self.TTS_ENDPOINT)
             self.logger.debug(f"TTS request: {len(text)} chars, voice: {voice_or_model}")
             
-            # Make the API request with a fresh client for better performance
+            # Calculate timeout based on text length
+            char_count = len(text)
+            base_timeout = 60  # 1 minute base
+            extra_timeout = min(240, char_count // 1000 * 10)  # 10 seconds per 1000 chars, max 4 minutes extra
+            total_timeout = base_timeout + extra_timeout
+            
+            # Make the API request with streaming to track progress
             with httpx.Client() as client:
-                response = client.post(
+                if progress_callback:
+                    progress_callback(15, "Connecting to API...")
+                
+                with client.stream(
+                    "POST",
                     f"{self.BASE_URL}{self.TTS_ENDPOINT}",
                     json=request_data,
                     headers=headers,
-                    timeout=30.0  # Reduced timeout for faster failure detection
-                )
+                    timeout=total_timeout
+                ) as response:
+                    
+                    if progress_callback:
+                        progress_callback(25, "Processing text with AI...")
+                    
+                    # Handle response status
+                    if response.status_code == 401:
+                        raise AuthenticationError("Fish Audio", "Invalid API key")
+                    elif response.status_code == 400:
+                        raise TTSServiceError("Fish Audio", "Bad request - check text and model parameters")
+                    elif response.status_code == 429:
+                        raise TTSServiceError("Fish Audio", "Rate limit exceeded - please wait and try again")
+                    elif response.status_code != 200:
+                        raise NetworkError(f"Fish Audio API error", response.status_code)
+                    
+                    if progress_callback:
+                        progress_callback(40, "Receiving audio data...")
+                    
+                    # Prepare output file for streaming write
+                    output_file_path = Path(output_file_path)
+                    output_file_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Stream the response content directly to file with improved progress tracking
+                    content_length = response.headers.get('content-length')
+                    download_start_time = time.time()
+                    last_progress_update = download_start_time
+                    bytes_downloaded = 0
+                    last_reported_progress = 40
+                    
+                    with open(output_file_path, 'wb') as output_file:
+                        if content_length:
+                            content_length = int(content_length)
+                            
+                            for chunk in response.iter_bytes(chunk_size=8192):
+                                if not chunk:
+                                    continue
+                                    
+                                output_file.write(chunk)
+                                bytes_downloaded += len(chunk)
+                                
+                                # Update progress based on download (40% to 90% range)
+                                if progress_callback and content_length > 0:
+                                    download_progress = (bytes_downloaded / content_length) * 50  # 50% of total progress for download
+                                    total_progress = 40 + download_progress
+                                    
+                                    # Ensure smooth progression - never go backwards
+                                    current_progress = max(total_progress, last_reported_progress + 0.5)
+                                    current_progress = min(90, current_progress)  # Cap at 90%
+                                    
+                                    # Show data size in status
+                                    size_mb = bytes_downloaded / (1024 * 1024)
+                                    if size_mb > 1:
+                                        status = f"Downloading and saving audio... ({size_mb:.1f} MB)"
+                                    else:
+                                        status = f"Downloading and saving audio... ({bytes_downloaded // 1024} KB)"
+                                    
+                                    # Only update if progress increased significantly
+                                    if current_progress > last_reported_progress + 1:
+                                        progress_callback(int(current_progress), status)
+                                        last_reported_progress = current_progress
+                        else:
+                            # No content length - use improved time-based progress estimation
+                            base_progress = 40
+                            last_reported_progress = base_progress
+                            
+                            for chunk in response.iter_bytes(chunk_size=8192):
+                                if not chunk:
+                                    continue
+                                    
+                                output_file.write(chunk)
+                                bytes_downloaded += len(chunk)
+                                current_time = time.time()
+                                
+                                # Update progress more frequently for better user experience
+                                if progress_callback and (
+                                    current_time - last_progress_update > 0.5 or  # Update every 0.5 seconds
+                                    bytes_downloaded % (64 * 1024) == 0  # Or every 64KB
+                                ):
+                                    # Improved adaptive progress algorithm
+                                    elapsed_time = current_time - download_start_time
+                                    size_mb = bytes_downloaded / (1024 * 1024)
+                                    
+                                    # Dynamic progress calculation based on multiple factors
+                                    if size_mb > 2.0:
+                                        # Large files: more aggressive time-based progression
+                                        time_factor = min(40, elapsed_time / 8 * 40)  # 40% over 8 seconds
+                                        size_factor = min(10, size_mb * 2)  # 10% based on data size
+                                    elif size_mb > 1.0:
+                                        # Medium files: balanced progression
+                                        time_factor = min(35, elapsed_time / 10 * 35)  # 35% over 10 seconds
+                                        size_factor = min(15, size_mb * 3)  # 15% based on data size
+                                    else:
+                                        # Small files: more size-based progression
+                                        time_factor = min(30, elapsed_time / 12 * 30)  # 30% over 12 seconds
+                                        size_factor = min(20, size_mb * 8)  # 20% based on data size
+                                    
+                                    # Calculate new progress
+                                    estimated_progress = base_progress + time_factor + size_factor
+                                    
+                                    # Ensure smooth progression - never go backwards
+                                    current_progress = max(estimated_progress, last_reported_progress + 1)
+                                    
+                                    # Cap at 90% to leave room for final verification
+                                    current_progress = min(90, current_progress)
+                                    
+                                    # Show data size in status
+                                    if size_mb > 1:
+                                        status = f"Downloading and saving audio... ({size_mb:.1f} MB)"
+                                    else:
+                                        status = f"Downloading and saving audio... ({bytes_downloaded // 1024} KB)"
+                                    
+                                    # Only update if progress actually increased
+                                    if current_progress > last_reported_progress:
+                                        progress_callback(int(current_progress), status)
+                                        last_reported_progress = current_progress
+                                        last_progress_update = current_time
             
             api_time = time.time() - start_time
             self.logger.debug(f"API response time: {api_time:.2f}s")
             
-            # Handle response
-            if response.status_code == 401:
-                raise AuthenticationError("Fish Audio", "Invalid API key")
-            elif response.status_code == 400:
-                raise TTSServiceError("Fish Audio", "Bad request - check text and model parameters")
-            elif response.status_code == 429:
-                raise TTSServiceError("Fish Audio", "Rate limit exceeded - please wait and try again")
-            elif response.status_code != 200:
-                raise NetworkError(f"Fish Audio API error", response.status_code)
+            if progress_callback:
+                progress_callback(95, "Verifying file...")
             
-            # Save the audio data
-            audio_data = response.content
-            if not audio_data:
-                raise TTSServiceError("Fish Audio", "Received empty audio data")
+            # Verify file was written
+            if not output_file_path.exists() or output_file_path.stat().st_size == 0:
+                raise TTSServiceError("Fish Audio", "Failed to save audio file")
             
-            self.logger.debug(f"Received {len(audio_data)} bytes of audio data")
+            file_size = output_file_path.stat().st_size
+            self.logger.debug(f"Received and saved {file_size} bytes of audio data")
             
-            # Write to file
-            write_start = time.time()
-            output_file_path = Path(output_file_path)
-            output_file_path.parent.mkdir(parents=True, exist_ok=True)
+            if progress_callback:
+                progress_callback(100, "Conversion complete!")
             
-            with open(output_file_path, 'wb') as f:
-                f.write(audio_data)
-            
-            write_time = time.time() - write_start
             total_time = time.time() - start_time
             
             # Verify file was written
@@ -331,9 +525,9 @@ class FishTTSClient(TTSServiceInterface):
                 raise TTSServiceError("Fish Audio", "Failed to save audio file")
             
             self.logger.info(
-                f"TTS conversion successful: {len(text)} chars → {len(audio_data)} bytes → {output_file_path}"
+                f"TTS conversion successful: {len(text)} chars → {file_size} bytes → {output_file_path}"
             )
-            self.logger.debug(f"Total time: {total_time:.2f}s (API: {api_time:.2f}s, Write: {write_time:.3f}s)")
+            self.logger.debug(f"Total time: {total_time:.2f}s (API: {api_time:.2f}s)")
             return True
             
         except (AuthenticationError, NetworkError, TTSServiceError):
@@ -376,7 +570,7 @@ class FishTTSClient(TTSServiceInterface):
     
     def get_default_voice(self) -> str:
         """Get the default voice/model for Fish Audio."""
-        return "speech-1.6"
+        return "b545c585f631496c914815291da4e893"
     
     def get_character_limit(self) -> Optional[int]:
         """Get the character limit for Fish Audio (if any)."""
