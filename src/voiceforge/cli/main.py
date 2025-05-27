@@ -51,7 +51,50 @@ def cli(ctx: CLIContext, verbose: bool, config_dir: Optional[str]):
     VoiceForge - Convert text files to MP3 audio using advanced TTS services.
     
     A powerful command-line tool for converting text files to high-quality
-    MP3 audio using various Text-to-Speech service providers.
+    MP3 audio using various Text-to-Speech service providers with natural
+    speech processing and optimized presets.
+
+    \b
+    🎯 QUICK START:
+      1. Set up API key:     voiceforge config set-api-key fish_audio YOUR_KEY
+      2. Convert text:       voiceforge convert --input story.txt
+      3. Use presets:        voiceforge convert --input story.txt --speech-type female-narrator
+      4. List options:       voiceforge list-speech-types
+
+    \b
+    🎭 SPEECH TYPE PRESETS:
+      female-narrator        Professional female audiobook narration
+      male-narrator          Professional male audiobook narration
+      audiobook              Long-form audiobook optimization
+      presentation           Clear business presentations
+      educational            Engaging educational content
+      podcast                Conversational podcast content
+      meditation             Calm, soothing relaxation guides
+      technical              Precise technical documentation
+      
+    \b
+    🗣️ NATURAL SPEECH FEATURES:
+      • Smart punctuation pauses (commas, periods, questions)
+      • Configurable paragraph breaks (short/medium/long)
+      • Text preprocessing (abbreviations, numbers)
+      • Breathing pauses for long content
+      • Professional voice quality by default
+
+    \b
+    📈 REAL-TIME PROGRESS:
+      • Live progress tracking with status updates
+      • File size and download progress
+      • Smooth progress bars (no more 90% stalls!)
+      
+    \b
+    💡 EXAMPLES:
+      voiceforge convert --input novel.txt --speech-type audiobook
+      voiceforge convert --input slides.txt --speech-type presentation
+      voiceforge convert --input meditation.txt --speech-type meditation
+      voiceforge convert --input story.txt --speech-speed 0.8 --temperature 0.6
+      voiceforge convert --input file.txt --estimate-only
+      
+    Use 'voiceforge COMMAND --help' for detailed command information.
     """
     ctx.verbose = verbose
     
@@ -113,7 +156,67 @@ def convert(
     overwrite: bool,
     estimate_only: bool
 ):
-    """Convert a text file to MP3 audio."""
+    """
+    Convert a text file to MP3 audio with natural speech processing.
+    
+    Uses high-quality female voice and natural speech mode by default.
+    Speech type presets provide optimized parameters for different use cases.
+
+    \b
+    🎭 SPEECH TYPE PRESETS (Recommended):
+      --speech-type female-narrator    Professional female audiobook narration
+      --speech-type male-narrator      Professional male audiobook narration  
+      --speech-type audiobook          Long-form audiobook optimization
+      --speech-type presentation       Clear business presentations
+      --speech-type educational        Engaging educational content
+      --speech-type podcast            Conversational podcast content
+      --speech-type meditation         Calm, soothing relaxation guides
+      --speech-type technical          Precise technical documentation
+      --speech-type news               Authoritative news delivery
+      --speech-type storytelling       Expressive creative storytelling
+      --speech-type conversational     Natural everyday speech
+      --speech-type dramatic           Expressive theatrical content
+
+    \b
+    🗣️ NATURAL SPEECH PARAMETERS:
+      --speech-speed FLOAT             Speech speed (0.5-2.0, default: 0.9)
+      --temperature FLOAT              Speech variation (0.1-1.0, default: 0.7)
+      --top-p FLOAT                    Speech diversity (0.1-1.0, default: 0.7)
+      --paragraph-pause CHOICE         Pause length: short/medium/long (default: medium)
+      --no-natural                     Disable natural speech for basic TTS
+
+    \b
+    📁 OUTPUT OPTIONS:
+      --output FILENAME                Custom output filename (without .mp3 extension)
+      --output-dir PATH                Custom output directory
+      --bitrate CHOICE                 MP3 bitrate: 64/128/192 kbps (default: 128)
+      --overwrite                      Overwrite existing output files
+
+    \b
+    💡 BASIC EXAMPLES:
+      voiceforge convert --input story.txt
+      voiceforge convert --input story.txt --output my_audiobook
+      voiceforge convert --input story.txt --output-dir ./audio
+
+    \b
+    🎭 PRESET EXAMPLES:
+      voiceforge convert --input novel.txt --speech-type female-narrator
+      voiceforge convert --input slides.txt --speech-type presentation
+      voiceforge convert --input meditation.txt --speech-type meditation
+      voiceforge convert --input podcast.txt --speech-type podcast
+
+    \b
+    ⚙️ ADVANCED EXAMPLES:
+      voiceforge convert --input story.txt --speech-speed 0.8 --temperature 0.6
+      voiceforge convert --input story.txt --paragraph-pause long
+      voiceforge convert --input story.txt --voice speech-1.6 --no-natural
+      voiceforge convert --input story.txt --estimate-only
+
+    \b
+    📊 COST ESTIMATION:
+      Use --estimate-only to see cost and file size estimates before conversion.
+      Typical cost: ~$0.015 per 1,000 characters (~$0.05 for average article).
+    """
     try:
         # Handle speech type preset (overrides individual parameters)
         if speech_type:
@@ -345,7 +448,28 @@ def convert(
 @cli.group()
 @pass_context
 def config(ctx: CLIContext):
-    """Manage VoiceForge configuration."""
+    """
+    Manage VoiceForge configuration settings.
+    
+    Configure API keys, default providers, voices, and output settings.
+
+    \b
+    🔑 API KEY MANAGEMENT:
+      set-api-key PROVIDER KEY         Set API key for TTS provider
+      list-providers                   Show available providers and key status
+      
+    \b
+    🎵 VOICE SETTINGS:
+      set-default-voice PROVIDER ID    Set default voice for provider
+      show                             Display current configuration
+      
+    \b
+    💡 EXAMPLES:
+      voiceforge config set-api-key fish_audio YOUR_API_KEY
+      voiceforge config set-default-voice fish_audio b545c585f631496c914815291da4e893
+      voiceforge config list-providers
+      voiceforge config show
+    """
     pass
 
 
@@ -354,7 +478,21 @@ def config(ctx: CLIContext):
 @click.argument('api_key')
 @pass_context
 def set_api_key(ctx: CLIContext, provider: str, api_key: str):
-    """Set API key for a TTS provider."""
+    """
+    Set API key for a TTS provider.
+    
+    Securely stores the API key with encryption and validates it.
+
+    \b
+    ARGUMENTS:
+      PROVIDER    TTS provider name (e.g., fish_audio)
+      API_KEY     Your API key from the provider
+
+    \b
+    EXAMPLES:
+      voiceforge config set-api-key fish_audio sk-1234567890abcdef
+      voiceforge config set-api-key openai sk-proj-abcdef1234567890
+    """
     try:
         if ctx.config_manager.set_api_key(provider, api_key):
             ctx.config_manager.save_config()
@@ -378,7 +516,12 @@ def set_api_key(ctx: CLIContext, provider: str, api_key: str):
 @config.command('list-providers')
 @pass_context
 def list_providers(ctx: CLIContext):
-    """List available TTS providers."""
+    """
+    List available TTS providers and their configuration status.
+    
+    Shows which providers have API keys configured and which is the default.
+    ⭐ = default provider, ✅ = API key configured, ❌ = no API key
+    """
     providers = TTSServiceFactory.get_available_providers()
     
     if not providers:
@@ -395,7 +538,12 @@ def list_providers(ctx: CLIContext):
 @config.command('show')
 @pass_context
 def show_config(ctx: CLIContext):
-    """Show current configuration."""
+    """
+    Show current VoiceForge configuration.
+    
+    Displays default provider, output directory, configured providers,
+    and default voices for each provider.
+    """
     click.echo("VoiceForge Configuration:")
     click.echo(f"  Default provider: {ctx.config_manager.get_default_provider()}")
     click.echo(f"  Output directory: {ctx.config_manager.get_output_directory()}")
@@ -427,7 +575,24 @@ def show_config(ctx: CLIContext):
 @click.argument('voice_id')
 @pass_context
 def set_default_voice(ctx: CLIContext, provider: str, voice_id: str):
-    """Set default voice for a TTS provider."""
+    """
+    Set default voice for a TTS provider.
+    
+    The default voice will be used when no specific voice is requested.
+
+    \b
+    ARGUMENTS:
+      PROVIDER    TTS provider name (e.g., fish_audio)
+      VOICE_ID    Voice ID from the provider
+
+    \b
+    EXAMPLES:
+      voiceforge config set-default-voice fish_audio b545c585f631496c914815291da4e893
+      voiceforge config set-default-voice fish_audio speech-1.6
+      
+    \b
+    💡 TIP: Use 'voiceforge list-voices' to see available voice IDs
+    """
     try:
         # Check if provider has API key
         if not ctx.config_manager.has_api_key(provider):
@@ -470,7 +635,25 @@ def set_default_voice(ctx: CLIContext, provider: str, voice_id: str):
 @cli.command('list-speech-types')
 @pass_context
 def list_speech_types(ctx: CLIContext):
-    """List all available speech type presets."""
+    """
+    List all available speech type presets with descriptions.
+    
+    Speech type presets provide optimized parameters for different use cases,
+    including voice selection, speech speed, temperature, and pause settings.
+
+    \b
+    📂 CATEGORIES:
+      Narration      - Audiobooks, storytelling, long-form content
+      Professional   - Business, education, news, technical content  
+      Casual         - Podcasts, conversations, everyday speech
+      Specialized    - Meditation, dramatic performance, unique needs
+
+    \b
+    💡 USAGE:
+      voiceforge convert --input file.txt --speech-type PRESET_NAME
+      
+    Example: voiceforge convert --input novel.txt --speech-type female-narrator
+    """
     click.echo("🎭 Available Speech Type Presets:\n")
     
     presets = SpeechPresets.get_all_presets()
@@ -507,7 +690,28 @@ def list_speech_types(ctx: CLIContext):
 @click.option('--limit', '-l', type=int, default=20, help='Limit number of voices shown (default: 20)')
 @pass_context
 def list_voices(ctx: CLIContext, provider: Optional[str], ids_only: bool, limit: int):
-    """List available voices for a TTS provider."""
+    """
+    List available voices for a TTS provider.
+    
+    Shows voice names, IDs, types (AI/human), and languages.
+    Requires API key to be configured for the provider.
+
+    \b
+    OPTIONS:
+      --provider PROVIDER              TTS provider (default: configured provider)
+      --ids-only                       Show only voice IDs (one per line)
+      --limit NUMBER                   Limit voices shown (default: 20)
+
+    \b
+    EXAMPLES:
+      voiceforge list-voices
+      voiceforge list-voices --provider fish_audio
+      voiceforge list-voices --ids-only --limit 50
+      voiceforge list-voices --provider fish_audio --limit 10
+
+    \b
+    💡 TIP: Use voice IDs with --voice option or set as default voice
+    """
     try:
         if not provider:
             provider = ctx.config_manager.get_default_provider()
