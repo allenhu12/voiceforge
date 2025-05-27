@@ -203,7 +203,7 @@ VSVersionInfo(
             
             # For now, we'll skip icon creation
             # In a real scenario, you'd want to include proper icon files
-            print(f"⚠️  Icon file not found at {self.app_icon}")
+            print(f"[WARNING] Icon file not found at {self.app_icon}")
             print("   Consider adding icon files for better branding:")
             print("   - assets/icon.ico (Windows)")
             print("   - assets/icon.icns (macOS)")
@@ -213,27 +213,27 @@ VSVersionInfo(
         """Install PyInstaller if not already installed."""
         try:
             import PyInstaller
-            print(f"✅ PyInstaller already installed: {PyInstaller.__version__}")
+            print(f"[SUCCESS] PyInstaller already installed: {PyInstaller.__version__}")
         except ImportError:
-            print("📦 Installing PyInstaller...")
+            print("[INSTALL] Installing PyInstaller...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
-            print("✅ PyInstaller installed successfully")
+            print("[SUCCESS] PyInstaller installed successfully")
     
     def clean_build_dirs(self):
         """Clean build and dist directories."""
         for dir_path in [self.build_dir, self.dist_dir]:
             if dir_path.exists():
-                print(f"🧹 Cleaning {dir_path}")
+                print(f"[CLEAN] Cleaning {dir_path}")
                 shutil.rmtree(dir_path)
         
         # Clean spec files
         for spec_file in self.project_root.glob("*.spec"):
             spec_file.unlink()
-            print(f"🧹 Removed {spec_file}")
+            print(f"[CLEAN] Removed {spec_file}")
     
     def build_for_platform(self, platform_name: str, debug: bool = False):
         """Build executable for the specified platform."""
-        print(f"\n🔨 Building {self.app_name} for {platform_name}...")
+        print(f"\n[BUILD] Building {self.app_name} for {platform_name}...")
         
         # Ensure directories exist
         self.build_dir.mkdir(exist_ok=True)
@@ -283,13 +283,13 @@ VSVersionInfo(
         # Add Python path for imports
         cmd.extend(["--paths", str(self.src_dir)])
         
-        print(f"🚀 Running PyInstaller command:")
+        print(f"[RUN] Running PyInstaller command:")
         print(f"   {' '.join(cmd)}")
         
         # Run PyInstaller
         try:
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            print("✅ Build completed successfully!")
+            print("[SUCCESS] Build completed successfully!")
             
             # Show output file info
             output_dir = self.dist_dir / platform_name
@@ -299,15 +299,15 @@ VSVersionInfo(
                     for exe_file in executable_files:
                         if exe_file.is_file():
                             size_mb = exe_file.stat().st_size / (1024 * 1024)
-                            print(f"📦 Output: {exe_file} ({size_mb:.1f} MB)")
+                            print(f"[OUTPUT] Output: {exe_file} ({size_mb:.1f} MB)")
                             
                             # Make executable on Unix systems
                             if platform_name in ["linux", "macos"]:
                                 exe_file.chmod(0o755)
-                                print(f"🔧 Made executable: {exe_file}")
+                                print(f"[EXEC] Made executable: {exe_file}")
         
         except subprocess.CalledProcessError as e:
-            print(f"❌ Build failed with error code {e.returncode}")
+            print(f"[ERROR] Build failed with error code {e.returncode}")
             print(f"Error output: {e.stderr}")
             return False
         
@@ -376,7 +376,7 @@ fi
         if platform_name in ["macos", "linux"]:
             script_file.chmod(0o755)
         
-        print(f"📝 Created build script: {script_file}")
+        print(f"[SCRIPT] Created build script: {script_file}")
         return script_file
 
 
@@ -405,10 +405,10 @@ def main():
         elif system == "linux":
             args.platform = "linux"
         else:
-            print(f"❌ Unsupported platform: {system}")
+            print(f"[ERROR] Unsupported platform: {system}")
             sys.exit(1)
     
-    print(f"🎯 VoiceForge Build Configuration")
+    print(f"[CONFIG] VoiceForge Build Configuration")
     print(f"   Version: {config.app_version}")
     print(f"   Platform: {args.platform}")
     print(f"   Debug: {args.debug}")
@@ -416,10 +416,10 @@ def main():
     
     # Create build scripts if requested
     if args.create_scripts:
-        print("\n📝 Creating build scripts...")
+        print("\n[SCRIPT] Creating build scripts...")
         for platform_name in ["windows", "macos", "linux"]:
             config.create_build_script(platform_name)
-        print("✅ Build scripts created successfully!")
+        print("[SUCCESS] Build scripts created successfully!")
         return
     
     # Clean build directories if requested
@@ -432,7 +432,7 @@ def main():
     # Build for specified platform(s)
     if args.platform == "all":
         platforms = ["windows", "macos", "linux"]
-        print("⚠️  Building for all platforms requires cross-compilation setup")
+        print("[WARNING] Building for all platforms requires cross-compilation setup")
         print("   Consider building on each target platform separately")
     else:
         platforms = [args.platform]
@@ -442,15 +442,15 @@ def main():
         if config.build_for_platform(platform_name, args.debug):
             success_count += 1
         else:
-            print(f"❌ Failed to build for {platform_name}")
+            print(f"[ERROR] Failed to build for {platform_name}")
     
     # Summary
-    print(f"\n📊 Build Summary:")
+    print(f"\n[SUMMARY] Build Summary:")
     print(f"   Successful builds: {success_count}/{len(platforms)}")
     
     if success_count == len(platforms):
-        print("🎉 All builds completed successfully!")
-        print("\n📦 Distribution files:")
+        print("[SUCCESS] All builds completed successfully!")
+        print("\n[DIST] Distribution files:")
         for platform_name in platforms:
             dist_dir = config.dist_dir / platform_name
             if dist_dir.exists():
@@ -459,7 +459,7 @@ def main():
                         size_mb = file.stat().st_size / (1024 * 1024)
                         print(f"   {file} ({size_mb:.1f} MB)")
         
-        print("\n🚀 Usage Instructions:")
+        print("\n[USAGE] Usage Instructions:")
         print("   1. Copy the executable to the target system")
         print("   2. Run the executable from command line:")
         for platform_name in platforms:
@@ -470,7 +470,7 @@ def main():
         print("   3. Set up API key: VoiceForge config set-api-key fish_audio YOUR_KEY")
         print("   4. Convert text: VoiceForge convert --input file.txt")
     else:
-        print("❌ Some builds failed. Check the error messages above.")
+        print("[ERROR] Some builds failed. Check the error messages above.")
         sys.exit(1)
 
 
