@@ -5,6 +5,9 @@ Convert text files to high-quality MP3 audio using advanced Text-to-Speech servi
 ## Features
 
 - 🎯 **Simple CLI Interface** - Easy-to-use command-line tool
+- 🎭 **Speech Type Presets** - 12 optimized presets for different use cases (audiobook, podcast, presentation, etc.)
+- 🗣️ **Natural Speech Mode** - Enhanced text preprocessing with proper pauses and natural flow
+- 📈 **Real-Time Progress Tracking** - Smooth progress bars with live status updates
 - 🔌 **Pluggable TTS Providers** - Support for Fish Audio, with more providers coming
 - 💰 **Cost Estimation** - Know the cost before conversion
 - 📁 **Batch Processing** - Convert multiple files efficiently
@@ -31,20 +34,27 @@ pip install voiceforge[gui]
    voiceforge config set-api-key fish_audio YOUR_API_KEY
    ```
 
-2. **Convert a text file**:
+2. **Convert a text file** (uses high-quality female voice + natural speech by default):
    ```bash
    voiceforge convert --input story.txt
    ```
 
-3. **List available voices**:
+3. **Use speech type presets** for optimized results:
+   ```bash
+   voiceforge convert --input story.txt --speech-type female-narrator
+   ```
+
+4. **List available voices and speech types**:
    ```bash
    voiceforge list-voices
+   voiceforge list-speech-types
    ```
 
 ## Supported TTS Providers
 
 ### Fish Audio
-- **Models**: speech-1.6, speech-1.4
+- **Models**: AI models (speech-1.6, speech-1.5) + Human voice models
+- **Default Voice**: High-quality female narrator (professional audiobook quality)
 - **Languages**: English, Chinese, Japanese, Korean, French, German, Spanish, Arabic
 - **Pricing**: ~$0.015 per 1,000 characters
 - **Setup**: Get your API key from [Fish Audio](https://fish.audio/)
@@ -52,15 +62,53 @@ pip install voiceforge[gui]
 ## CLI Commands
 
 ### Convert Text to Speech
+
+#### Basic Conversion
 ```bash
-# Basic conversion
+# Basic conversion (high-quality female voice + natural speech enabled by default)
 voiceforge convert --input file.txt
 
-# Specify provider and voice
-voiceforge convert --input file.txt --provider fish_audio --voice speech-1.6
+# Specify custom output filename
+voiceforge convert --input file.txt --output my_audio
 
 # Custom output directory
 voiceforge convert --input file.txt --output-dir ./audio
+```
+
+#### Speech Type Presets (Recommended)
+```bash
+# Female narrator for audiobooks
+voiceforge convert --input novel.txt --speech-type female-narrator
+
+# Male narrator for documentaries
+voiceforge convert --input documentary.txt --speech-type male-narrator
+
+# Professional presentation
+voiceforge convert --input slides.txt --speech-type presentation
+
+# Educational content
+voiceforge convert --input lesson.txt --speech-type educational
+
+# Meditation guide
+voiceforge convert --input meditation.txt --speech-type meditation
+
+# Podcast episode
+voiceforge convert --input episode.txt --speech-type podcast
+
+# List all available presets
+voiceforge list-speech-types
+```
+
+#### Advanced Options
+```bash
+# Specify provider and voice
+voiceforge convert --input file.txt --provider fish_audio --voice speech-1.6
+
+# Fine-tune natural speech parameters
+voiceforge convert --input file.txt --speech-speed 0.8 --temperature 0.6
+
+# Disable natural speech for basic TTS
+voiceforge convert --input file.txt --no-natural
 
 # Estimate cost only
 voiceforge convert --input file.txt --estimate-only
@@ -78,14 +126,102 @@ voiceforge config list-providers
 voiceforge config show
 ```
 
-### Voice Management
+### Voice and Speech Type Management
 ```bash
 # List available voices
 voiceforge list-voices
 
 # List voices for specific provider
 voiceforge list-voices --provider fish_audio
+
+# List all speech type presets
+voiceforge list-speech-types
+
+# Set default voice
+voiceforge config set-default-voice fish_audio VOICE_ID
 ```
+
+## Speech Type Presets
+
+VoiceForge includes 12 professionally optimized speech type presets for different use cases:
+
+### Narration
+- **`female-narrator`** - Professional female audiobook narration
+- **`male-narrator`** - Professional male audiobook narration  
+- **`audiobook`** - Long-form audiobook optimization
+- **`storytelling`** - Expressive creative storytelling
+
+### Professional
+- **`presentation`** - Clear business presentations
+- **`educational`** - Engaging educational content
+- **`news`** - Authoritative news delivery
+- **`technical`** - Precise technical documentation
+
+### Casual
+- **`podcast`** - Conversational podcast content
+- **`conversational`** - Natural everyday speech
+
+### Specialized
+- **`meditation`** - Calm, soothing relaxation guides
+- **`dramatic`** - Expressive theatrical content
+
+Each preset includes optimized parameters for:
+- **Speech Speed** - Appropriate pacing for content type
+- **Temperature** - Natural variation vs. consistency
+- **Top-p** - Speech diversity control
+- **Paragraph Pauses** - Proper content structure
+- **Voice Selection** - Best voice for the use case
+
+### Usage Examples
+```bash
+# Professional audiobook narration
+voiceforge convert --input novel.txt --speech-type female-narrator
+
+# Business presentation
+voiceforge convert --input slides.txt --speech-type presentation
+
+# Meditation guide
+voiceforge convert --input meditation.txt --speech-type meditation
+
+# See all available presets
+voiceforge list-speech-types
+```
+
+## Natural Speech Mode
+
+VoiceForge includes advanced natural speech processing enabled by default:
+
+### Features
+- **Smart Punctuation Pauses** - Proper timing at commas, periods, questions
+- **Paragraph Breaks** - Configurable pauses between sections
+- **Text Preprocessing** - Abbreviation expansion, number normalization
+- **Breathing Pauses** - Natural breaks in long content
+- **Sentence Optimization** - Breaking up overly long sentences
+
+### Punctuation Pause Hierarchy
+- **Commas, Semicolons, Colons** → Medium pauses (`, ..`)
+- **Periods, Questions, Exclamations** → Long pauses (`. ...`)
+- **Paragraph Breaks** → Extra long pauses (`... ... ...`)
+
+### Configuration Options
+```bash
+# Default natural speech (recommended)
+voiceforge convert --input text.txt
+
+# Customize speech parameters
+voiceforge convert --input text.txt --speech-speed 0.8 --temperature 0.6
+
+# Adjust paragraph pause length
+voiceforge convert --input text.txt --paragraph-pause long
+
+# Disable for basic TTS
+voiceforge convert --input text.txt --no-natural
+```
+
+### Paragraph Pause Options
+- **`short`** - Quick transitions for conversational content
+- **`medium`** - Balanced pacing (default)
+- **`long`** - Clear separation for audiobooks and presentations
 
 ## Configuration
 
@@ -102,7 +238,7 @@ VoiceForge stores configuration in platform-specific directories:
   "providers": {
     "fish_audio": {
       "api_key_encrypted": "...",
-      "default_voice": "speech-1.6"
+      "default_voice": "b545c585f631496c914815291da4e893"
     }
   },
   "output": {
@@ -190,11 +326,15 @@ Common issues:
 
 ## Roadmap
 
-### Phase 1: Core CLI (Current)
+### Phase 1: Core CLI (✅ Complete)
 - ✅ Fish Audio integration
 - ✅ Basic CLI interface
 - ✅ Configuration management
 - ✅ Cost estimation
+- ✅ Speech type presets (12 optimized presets)
+- ✅ Natural speech mode with text preprocessing
+- ✅ Real-time progress tracking
+- ✅ Professional voice quality
 
 ### Phase 2: Enhanced Features
 - 🔄 Additional TTS providers (OpenAI, Google, Azure)
