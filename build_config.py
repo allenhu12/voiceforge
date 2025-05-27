@@ -181,7 +181,7 @@ VSVersionInfo(
            StringStruct(u'FileDescription', u'{self.app_description}'),
            StringStruct(u'FileVersion', u'{self.app_version}'),
            StringStruct(u'InternalName', u'{self.app_name}'),
-           StringStruct(u'LegalCopyright', u'Copyright © 2025 {self.app_author}'),
+           StringStruct(u'LegalCopyright', u'Copyright (C) 2025 {self.app_author}'),
            StringStruct(u'OriginalFilename', u'{self.app_name}.exe'),
            StringStruct(u'ProductName', u'{self.app_name}'),
            StringStruct(u'ProductVersion', u'{self.app_version}')])
@@ -192,7 +192,7 @@ VSVersionInfo(
         
         version_file = self.spec_dir / "version_info.txt"
         version_file.parent.mkdir(exist_ok=True)
-        version_file.write_text(version_info_content)
+        version_file.write_text(version_info_content, encoding='utf-8')
         return version_file
     
     def create_icon_file(self):
