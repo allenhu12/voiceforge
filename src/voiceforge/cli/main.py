@@ -74,17 +74,17 @@ def cli(ctx: CLIContext, verbose: bool, config_dir: Optional[str]):
       
     \b
     NATURAL SPEECH FEATURES:
-      • Smart punctuation pauses (commas, periods, questions)
-      • Configurable paragraph breaks (short/medium/long)
-      • Text preprocessing (abbreviations, numbers)
-      • Breathing pauses for long content
-      • Professional voice quality by default
+      - Smart punctuation pauses (commas, periods, questions)
+      - Configurable paragraph breaks (short/medium/long)
+      - Text preprocessing (abbreviations, numbers)
+      - Breathing pauses for long content
+      - Professional voice quality by default
 
     \b
     REAL-TIME PROGRESS:
-      • Live progress tracking with status updates
-      • File size and download progress
-      • Smooth progress bars (no more 90% stalls!)
+      - Live progress tracking with status updates
+      - File size and download progress
+      - Smooth progress bars (no more 90% stalls!)
       
     \b
     EXAMPLES:
@@ -671,7 +671,7 @@ def list_speech_types(ctx: CLIContext):
         for name in preset_names:
             if name in presets:
                 preset = presets[name]
-                click.echo(f"  • {name}: {preset.description}")
+                click.echo(f"  - {name}: {preset.description}")
                 click.echo(f"    Use case: {preset.use_case}")
                 click.echo(f"    Parameters: speed={preset.speech_speed}, temp={preset.temperature}, top_p={preset.top_p}")
                 click.echo()
@@ -749,14 +749,14 @@ def list_voices(ctx: CLIContext, provider: Optional[str], ids_only: bool, limit:
         
         # Display AI models first
         if ai_models:
-            click.echo("🤖 AI Models:")
+            click.echo("AI Models:")
             for model in ai_models:
                 name = model.get('name', model.get('id', 'Unknown'))
                 model_id = model.get('id', 'unknown')
                 description = model.get('description', '')
                 languages = ', '.join(model.get('languages', []))
                 
-                click.echo(f"  • {name} ({model_id})")
+                click.echo(f"  - {name} ({model_id})")
                 if description:
                     click.echo(f"    {description}")
                 if languages:
@@ -765,7 +765,7 @@ def list_voices(ctx: CLIContext, provider: Optional[str], ids_only: bool, limit:
         
         # Display human voice models
         if human_models:
-            click.echo("👤 Human Voice Models:")
+            click.echo("Human Voice Models:")
             for model in human_models:
                 name = model.get('name', model.get('id', 'Unknown'))
                 model_id = model.get('id', 'unknown')
@@ -776,7 +776,7 @@ def list_voices(ctx: CLIContext, provider: Optional[str], ids_only: bool, limit:
                 task_count = model.get('task_count', 0)
                 tags = model.get('tags', [])
                 
-                click.echo(f"  • {name} ({model_id})")
+                click.echo(f"  - {name} ({model_id})")
                 if description:
                     click.echo(f"    {description}")
                 if languages:
