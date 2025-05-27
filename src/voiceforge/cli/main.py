@@ -55,14 +55,14 @@ def cli(ctx: CLIContext, verbose: bool, config_dir: Optional[str]):
     speech processing and optimized presets.
 
     \b
-    🎯 QUICK START:
+    QUICK START:
       1. Set up API key:     voiceforge config set-api-key fish_audio YOUR_KEY
       2. Convert text:       voiceforge convert --input story.txt
       3. Use presets:        voiceforge convert --input story.txt --speech-type female-narrator
       4. List options:       voiceforge list-speech-types
 
     \b
-    🎭 SPEECH TYPE PRESETS:
+    SPEECH TYPE PRESETS:
       female-narrator        Professional female audiobook narration
       male-narrator          Professional male audiobook narration
       audiobook              Long-form audiobook optimization
@@ -73,7 +73,7 @@ def cli(ctx: CLIContext, verbose: bool, config_dir: Optional[str]):
       technical              Precise technical documentation
       
     \b
-    🗣️ NATURAL SPEECH FEATURES:
+    NATURAL SPEECH FEATURES:
       • Smart punctuation pauses (commas, periods, questions)
       • Configurable paragraph breaks (short/medium/long)
       • Text preprocessing (abbreviations, numbers)
@@ -81,13 +81,13 @@ def cli(ctx: CLIContext, verbose: bool, config_dir: Optional[str]):
       • Professional voice quality by default
 
     \b
-    📈 REAL-TIME PROGRESS:
+    REAL-TIME PROGRESS:
       • Live progress tracking with status updates
       • File size and download progress
       • Smooth progress bars (no more 90% stalls!)
       
     \b
-    💡 EXAMPLES:
+    EXAMPLES:
       voiceforge convert --input novel.txt --speech-type audiobook
       voiceforge convert --input slides.txt --speech-type presentation
       voiceforge convert --input meditation.txt --speech-type meditation
@@ -163,7 +163,7 @@ def convert(
     Speech type presets provide optimized parameters for different use cases.
 
     \b
-    🎭 SPEECH TYPE PRESETS (Recommended):
+    SPEECH TYPE PRESETS (Recommended):
       --speech-type female-narrator    Professional female audiobook narration
       --speech-type male-narrator      Professional male audiobook narration  
       --speech-type audiobook          Long-form audiobook optimization
@@ -178,7 +178,7 @@ def convert(
       --speech-type dramatic           Expressive theatrical content
 
     \b
-    🗣️ NATURAL SPEECH PARAMETERS:
+    NATURAL SPEECH PARAMETERS:
       --speech-speed FLOAT             Speech speed (0.5-2.0, default: 0.9)
       --temperature FLOAT              Speech variation (0.1-1.0, default: 0.7)
       --top-p FLOAT                    Speech diversity (0.1-1.0, default: 0.7)
@@ -186,34 +186,34 @@ def convert(
       --no-natural                     Disable natural speech for basic TTS
 
     \b
-    📁 OUTPUT OPTIONS:
+    OUTPUT OPTIONS:
       --output FILENAME                Custom output filename (without .mp3 extension)
       --output-dir PATH                Custom output directory
       --bitrate CHOICE                 MP3 bitrate: 64/128/192 kbps (default: 128)
       --overwrite                      Overwrite existing output files
 
     \b
-    💡 BASIC EXAMPLES:
+    BASIC EXAMPLES:
       voiceforge convert --input story.txt
       voiceforge convert --input story.txt --output my_audiobook
       voiceforge convert --input story.txt --output-dir ./audio
 
     \b
-    🎭 PRESET EXAMPLES:
+    PRESET EXAMPLES:
       voiceforge convert --input novel.txt --speech-type female-narrator
       voiceforge convert --input slides.txt --speech-type presentation
       voiceforge convert --input meditation.txt --speech-type meditation
       voiceforge convert --input podcast.txt --speech-type podcast
 
     \b
-    ⚙️ ADVANCED EXAMPLES:
+    ADVANCED EXAMPLES:
       voiceforge convert --input story.txt --speech-speed 0.8 --temperature 0.6
       voiceforge convert --input story.txt --paragraph-pause long
       voiceforge convert --input story.txt --voice speech-1.6 --no-natural
       voiceforge convert --input story.txt --estimate-only
 
     \b
-    📊 COST ESTIMATION:
+    COST ESTIMATION:
       Use --estimate-only to see cost and file size estimates before conversion.
       Typical cost: ~$0.015 per 1,000 characters (~$0.05 for average article).
     """
@@ -233,13 +233,13 @@ def convert(
                 if not voice:
                     voice = preset.voice_preference
                 
-                click.echo(f"🎭 Using speech type preset: {preset.name}")
+                click.echo(f"[PRESET] Using speech type preset: {preset.name}")
                 click.echo(f"   Description: {preset.description}")
                 click.echo(f"   Use case: {preset.use_case}")
                 click.echo(f"   Parameters: speed={speech_speed}, temp={temperature}, top_p={top_p}, pause={paragraph_pause}")
                 
             except ValueError as e:
-                click.echo(f"❌ Error: {e}")
+                click.echo(f"[ERROR] Error: {e}")
                 sys.exit(1)
         
         # Handle natural speech mode (default is enabled)
@@ -261,7 +261,7 @@ def convert(
         # Check API key (not required for estimate-only)
         api_key = ctx.config_manager.get_api_key(provider)
         if not api_key and not estimate_only:
-            click.echo(f"❌ No API key found for {provider}. Use 'voiceforge config set-api-key' to set it.")
+            click.echo(f"[ERROR] No API key found for {provider}. Use 'voiceforge config set-api-key' to set it.")
             sys.exit(1)
         
         # Initialize components
@@ -270,25 +270,25 @@ def convert(
         tts_service = TTSServiceFactory.create_service(provider)
         
         # Read input file
-        click.echo(f"📖 Reading input file: {input_file}")
+        click.echo(f"[READ] Reading input file: {input_file}")
         text = input_handler.read_text_file(input_file)
         char_count = input_handler.count_characters(text)
         
-        click.echo(f"📊 Text statistics:")
+        click.echo(f"[STATS] Text statistics:")
         click.echo(f"   Characters: {char_count['total_characters']:,}")
         click.echo(f"   Words: {char_count['words']:,}")
         click.echo(f"   Lines: {char_count['lines']:,}")
         
         # Warn about large files
         if char_count['total_characters'] > 5000:
-            click.echo(f"\n⚠️  Large file detected! Processing {char_count['total_characters']:,} characters may take several minutes.")
+            click.echo(f"\n[WARNING] Large file detected! Processing {char_count['total_characters']:,} characters may take several minutes.")
             if char_count['total_characters'] > 10000:
-                click.echo(f"⚠️  Files over 10,000 characters may take 5-10 minutes or more to process.")
+                click.echo(f"[WARNING] Files over 10,000 characters may take 5-10 minutes or more to process.")
         
         # Estimate processing time
         estimated_time = char_count['total_characters'] / 100  # Rough estimate: 100 chars/second
         if estimated_time > 10:
-            click.echo(f"⏱️  Estimated processing time: {estimated_time:.0f}-{estimated_time*1.5:.0f} seconds")
+            click.echo(f"[TIME] Estimated processing time: {estimated_time:.0f}-{estimated_time*1.5:.0f} seconds")
         
         # Determine voice
         if not voice:
@@ -307,7 +307,7 @@ def convert(
                     "speech-1.5": "Speech 1.5 (AI)"
                 }
                 voice_name = voice_names.get(voice, voice[:8] + "...")
-                click.echo(f"📢 Using configured default voice: {voice_name}")
+                click.echo(f"[VOICE] Using configured default voice: {voice_name}")
             else:
                 # Fall back to provider's default
                 voice = tts_service.get_default_voice()
@@ -315,23 +315,23 @@ def convert(
         # Cost estimation
         estimated_cost = tts_service.estimate_cost(text, voice)
         if estimated_cost:
-            click.echo(f"💰 Estimated cost: {estimated_cost}")
+            click.echo(f"[COST] Estimated cost: {estimated_cost}")
         
         # Output size estimation
         size_estimate = tts_service.estimate_output_size(text, int(bitrate), voice)
         if size_estimate and "error" not in size_estimate:
-            click.echo(f"📏 Estimated output:")
+            click.echo(f"[SIZE] Estimated output:")
             click.echo(f"   Duration: {size_estimate['estimated_duration_str']}")
             click.echo(f"   File size: {size_estimate['estimated_size_str']} (at {bitrate} kbps)")
             click.echo(f"   Words: {size_estimate['word_count']:,} (~{size_estimate['words_per_minute']} WPM)")
         
         if estimate_only:
-            click.echo("✅ Cost estimation complete.")
+            click.echo("[SUCCESS] Cost estimation complete.")
             return
         
         # Confirm conversion
         if not click.confirm(f"Convert using {provider} with voice '{voice}'?"):
-            click.echo("❌ Conversion cancelled.")
+            click.echo("[CANCEL] Conversion cancelled.")
             return
         
         # Determine output path
